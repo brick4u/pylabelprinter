@@ -8,7 +8,7 @@ from typing import List, Optional, TYPE_CHECKING
 
 from PIL import Image
 
-from .enums import PaperType, AutoOffTime, Alignment, PrintDensity
+from .enums import PaperType, AutoOffTime, Alignment, PrintDensity, PrintTechnology
 from .exceptions import UnsupportedFeatureError
 from .label import Label, ImageSize
 
@@ -32,6 +32,8 @@ class PrinterInfo:
     print_density: Optional[PrintDensity] = None
     supported_paper_types: Optional[List[PaperType]] = None
     supported_densities: Optional[List[PrintDensity]] = None
+    print_technology: Optional[PrintTechnology] = None       # Aktuell eingestelltes Verfahren
+    supported_print_technologies: Optional[List[PrintTechnology]] = None  # Vom Drucker unterstützt (Datenblatt)
 
 
 class Printer(ABC):
@@ -105,6 +107,15 @@ class Printer(ABC):
     def supported_paper_types(self) -> List[PaperType]:
         """Liste der unterstützten Papierarten."""
         ...
+    
+    @property
+    def supported_print_technologies(self) -> List[PrintTechnology]:
+        """Liste der unterstützten Druckverfahren (Datenblatt)."""
+        return self._get_supported_print_technologies()
+    
+    def _get_supported_print_technologies(self) -> List[PrintTechnology]:
+        """Interne Methode: unterstützte Verfahren. Override wenn hardwareabhängig."""
+        return [PrintTechnology.DIRECT_THERMAL]
     
     # === Info-Abfragen ===
     
@@ -234,6 +245,37 @@ class Printer(ABC):
             label=label
         )
     
+    # === Print Technology ===
+    
+    @property
+    def print_technology(self) -> PrintTechnology:
+        """Aktuell eingestelltes Druckverfahren."""
+        return self._get_print_technology()
+
+    @print_technology.setter
+    def print_technology(self, value: PrintTechnology) -> None:
+        """Druckverfahren setzen mit Validierung."""
+        if value not in self.supported_print_technologies:
+            supported = [t.name for t in self.supported_print_technologies]
+            raise UnsupportedFeatureError(
+                f"Print technology {value.name} not supported. "
+                f"Supported: {supported}"
+            )
+        self._set_print_technology(value)
+    
+    def _get_print_technology(self) -> PrintTechnology:
+        """Interne Methode: aktuelles Druckverfahren. Override wenn live abfragbar."""
+        configured = getattr(self, "_PRINT_TECHNOLOGY", None)
+        if configured is not None:
+            return configured
+        # Standard: ersten Eintrag aus supported_print_technologies nehmen
+        techs = self.supported_print_technologies
+        return techs[0] if techs else PrintTechnology.DIRECT_THERMAL
+
+    def _set_print_technology(self, value: PrintTechnology) -> None:
+        """Interne Methode: Druckverfahren setzen. Override wenn unterstützt."""
+        raise UnsupportedFeatureError("Print technology setting not supported")
+    
     # === Drucken ===
     
     @abstractmethod
@@ -244,6 +286,8 @@ class Printer(ABC):
         copies: int = 1,
         density: Optional[PrintDensity] = None,
         alignment: Alignment = Alignment.CENTER,
+        x_offset_mm: float = 0.0,
+        y_offset_mm: float = 0.0,
     ) -> None:
         """Drucke ein Bild auf ein Label.
         
@@ -253,6 +297,8 @@ class Printer(ABC):
             copies: Anzahl Kopien
             density: Druckdichte (None = aktuelle Einstellung beibehalten)
             alignment: Ausrichtung auf Druckbreite
+            x_offset_mm: Horizontaler Offset in mm (positiv = rechts)
+            y_offset_mm: Vertikaler Offset in mm (positiv = unten)
         """
         ...
     

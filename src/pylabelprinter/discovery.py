@@ -25,6 +25,13 @@ class PrinterDevice:
     usb_port: Optional[str] = None     # z.B. "3-1.4.4" (stabiler USB-Port-Pfad)
     ieee1284_id: Optional[str] = None  # Raw IEEE 1284 ID String
     serial_number: Optional[str] = None  # Seriennummer (falls abfragbar)
+    # Datenblatt-Felder (aus Registry/Registration, ohne Verbindung)
+    max_width_mm: Optional[float] = None
+    dpi: Optional[int] = None
+    supported_paper_types: Optional[List[str]] = None
+    supported_densities: Optional[List[str]] = None
+    supported_print_technologies: Optional[List[str]] = None
+    print_technology: Optional[str] = None  # Aktuell eingestelltes Verfahren
     
     def __str__(self) -> str:
         return f"{self.device_id}  {self.name}"
@@ -43,6 +50,13 @@ def _parse_ieee1284_id(ieee1284_str: str) -> Dict[str, str]:
         if ":" in part:
             key, _, value = part.partition(":")
             result[key.strip().upper()] = value.strip()
+    # Normalisiere Zebra-spezifische Keys (MODEL -> MDL, MANUFACTURER -> MFG)
+    if "MODEL" in result and "MDL" not in result:
+        result["MDL"] = result["MODEL"]
+    if "MANUFACTURER" in result and "MFG" not in result:
+        result["MFG"] = result["MANUFACTURER"]
+    if "COMMAND SET" in result and "CMD" not in result:
+        result["CMD"] = result["COMMAND SET"]
     return result
 
 
@@ -199,6 +213,13 @@ def list_printers() -> List[PrinterDevice]:
                         usb_port=usb_port,
                         ieee1284_id=ieee1284_str,
                         serial_number=serial_number,
+                        # Datenblatt-Felder (aus Registry)
+                        max_width_mm=reg.max_width_mm,
+                        dpi=reg.dpi,
+                        supported_paper_types=reg.supported_paper_types,
+                        supported_densities=reg.supported_densities,
+                        supported_print_technologies=reg.supported_print_technologies,
+                        print_technology=reg.print_technology,
                     ))
     
     return devices

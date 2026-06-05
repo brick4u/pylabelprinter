@@ -84,19 +84,36 @@ class UsbConnection(Connection):
     Pufferüberläufe im Drucker zu vermeiden.
     """
     
-    # Maximale Chunk-Größe pro USB-Write (Bytes)
+    # Konservative Standardwerte für kleine USB-Druckerpuffer.
+    # Schnellere Geräte können diese Werte instanzspezifisch überschreiben.
     WRITE_CHUNK_SIZE = 256
-    # Pause zwischen Chunks (Sekunden)
     WRITE_CHUNK_DELAY = 0.01
+    WRITE_RETRY_DELAY = 0.01
     
-    def __init__(self, device_path: str):
+    def __init__(
+        self,
+        device_path: str,
+        write_chunk_size: Optional[int] = None,
+        write_chunk_delay: Optional[float] = None,
+        write_retry_delay: Optional[float] = None,
+    ):
         """Initialisiere USB-Verbindung.
         
         Args:
             device_path: Pfad zum USB-Gerät (z.B. '/dev/usb/lp0')
+            write_chunk_size: Optionale Chunk-Größe pro Write
+            write_chunk_delay: Optionale Pause zwischen Chunks
+            write_retry_delay: Optionale Pause bei vollem USB-Puffer
         """
         self._device_path = device_path
         self._fd: Optional[int] = None
+        self._write_chunk_size = write_chunk_size or self.WRITE_CHUNK_SIZE
+        self._write_chunk_delay = (
+            self.WRITE_CHUNK_DELAY if write_chunk_delay is None else write_chunk_delay
+        )
+        self._write_retry_delay = (
+            self.WRITE_RETRY_DELAY if write_retry_delay is None else write_retry_delay
+        )
     
     @property
     def device_path(self) -> str:
@@ -140,6 +157,10 @@ class UsbConnection(Connection):
         um den Empfangspuffer des Druckers nicht zu überlaufen.
         USB hat (im Gegensatz zu Bluetooth RFCOMM) kein automatisches
         Flow Control.
+        
+        Achtung: Bei O_NONBLOCK kann os.write() BlockingIOError (EAGAIN)
+        werfen wenn der USB-Puffer voll ist. In dem Fall wird mit Delay
+        retried.
         """
         if self._fd is None:
             raise RuntimeError("Connection not open")
@@ -148,15 +169,18 @@ class UsbConnection(Connection):
         offset = 0
         
         while offset < len(data):
-            chunk = data[offset:offset + self.WRITE_CHUNK_SIZE]
-            written = os.write(self._fd, chunk)
+            chunk = data[offset:offset + self._write_chunk_size]
+            try:
+                written = os.write(self._fd, chunk)
+            except BlockingIOError:
+                # USB-Puffer voll – kurz warten und wiederholen
+                time.sleep(self._write_retry_delay)
+                continue
             total_written += written
-            offset += len(chunk)
+            offset += written  # written, nicht len(chunk)!
             
-            # Kleine Pause zwischen Chunks, damit der Drucker
-            # seinen Puffer verarbeiten kann
-            if offset < len(data):
-                time.sleep(self.WRITE_CHUNK_DELAY)
+            if offset < len(data) and self._write_chunk_delay > 0:
+                time.sleep(self._write_chunk_delay)
         
         return total_written
     

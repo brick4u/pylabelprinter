@@ -7,6 +7,7 @@ from enum import Enum, auto
 
 class PaperType(Enum):
     """Papierarten für Label-Drucker."""
+    AUTO_DETECT = auto()   # Drucker erkennt Medientyp automatisch
     CONTINUOUS = auto()    # Endlospapier (keine Erkennung)
     GAP = auto()           # Etiketten mit Lücke (Transparenz-Sensor)
     BLACK_MARK = auto()    # Schwarze Markierung auf Rückseite
@@ -46,3 +47,9 @@ class PrintDensity(Enum):
     MEDIUM = auto()       # Standard
     MEDIUM_DARK = auto()  # Kräftig
     DARK = auto()         # Dick - mehr Hitze
+
+
+class PrintTechnology(Enum):
+    """Druckverfahren."""
+    DIRECT_THERMAL = auto()    # Thermotransfer/Direktdruck ohne Farbband
+    THERMAL_TRANSFER = auto()  # Thermotransfer mit Farbband (Ribbon)

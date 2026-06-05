@@ -136,6 +136,8 @@ def print_test_label(
     label: Label,
     density=None,
     copies: int = 1,
+    x_offset_mm: float = 0.0,
+    y_offset_mm: float = 0.0,
 ) -> None:
     """Drucke ein Test-Label auf dem angegebenen Drucker.
     
@@ -144,6 +146,8 @@ def print_test_label(
         label: Label-Größe
         density: Optionale Druckdichte
         copies: Anzahl Kopien
+        x_offset_mm: Horizontaler Offset in mm (positiv = rechts)
+        y_offset_mm: Vertikaler Offset in mm (positiv = unten)
     """
     size = printer.get_image_size(label)
     image = create_test_label(
@@ -153,4 +157,5 @@ def print_test_label(
         dpi=printer.dpi,
     )
     
-    printer.print_image(image, label, copies=copies, density=density)
+    printer.print_image(image, label, copies=copies, density=density,
+                         x_offset_mm=x_offset_mm, y_offset_mm=y_offset_mm)

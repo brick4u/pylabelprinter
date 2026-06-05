@@ -6,8 +6,9 @@ Modellspezifische Unterschiede (Druckbreite, Kompression) werden über
 Template Methods in den Subklassen implementiert.
 """
 
-import time
 import os
+import time
+import warnings
 from abc import abstractmethod
 from typing import List, Optional, Union
 
@@ -15,7 +16,7 @@ from PIL import Image
 
 from ...printer import Printer, PrinterInfo
 from ...connection import UsbConnection
-from ...enums import PaperType, AutoOffTime, Alignment, PrintDensity
+from ...enums import PaperType, AutoOffTime, Alignment, PrintDensity, PrintTechnology
 from ...exceptions import NoPaperError, PrinterStandbyError
 from ...label import Label
 
@@ -91,6 +92,9 @@ class PhomemoPrinter(Printer):
         PrintDensity.MEDIUM_DARK,
         PrintDensity.DARK,
     ]
+    _SUPPORTED_PRINT_TECHNOLOGIES: List[PrintTechnology] = [
+        PrintTechnology.DIRECT_THERMAL,
+    ]
     
     # === Factory Methods ===
 
@@ -139,6 +143,10 @@ class PhomemoPrinter(Printer):
     @property
     def supported_densities(self) -> List[PrintDensity]:
         return self._SUPPORTED_DENSITIES.copy()
+    
+    @property
+    def supported_print_technologies(self) -> List[PrintTechnology]:
+        return list(self._SUPPORTED_PRINT_TECHNOLOGIES)
     
     # === Query Helpers ===
     
@@ -200,22 +208,36 @@ class PhomemoPrinter(Printer):
         return False
     
     def get_info(self) -> PrinterInfo:
-        """Hole vollständige Drucker-Informationen."""
+        """Hole vollständige Drucker-Informationen.
+
+        Datenblatt-Felder (aus Klassenkonstanten, kein Live-Query):
+            model, manufacturer, max_width_mm, dpi,
+            supported_paper_types, supported_densities
+
+        Live abgefragte Felder (via Protokoll):
+            firmware_version, serial_number, battery_level, has_paper,
+            paper_type, auto_off_time, print_density
+        """
         self._check_awake()
         return PrinterInfo(
+            # === Datenblatt (Klassenkonstanten) ===
             model=self.model,
             manufacturer=self.manufacturer,
-            firmware_version=self.firmware_version,
-            serial_number=self.serial_number,
             max_width_mm=self.max_width_mm,
             dpi=self.dpi,
+            supported_paper_types=self.supported_paper_types,
+            supported_densities=self.supported_densities,
+            # === Datenblatt (unterstützte Verfahren) ===
+            supported_print_technologies=self.supported_print_technologies,
+            print_technology=self.print_technology,
+            # === Live (via Protokoll) ===
+            firmware_version=self.firmware_version,
+            serial_number=self.serial_number,
             battery_level=self.battery_level,
             has_paper=self.has_paper,
             paper_type=self.paper_type,
             auto_off_time=self.auto_off_time,
             print_density=self.print_density,
-            supported_paper_types=self.supported_paper_types,
-            supported_densities=self.supported_densities,
         )
     
     # === Paper Type ===
@@ -274,6 +296,8 @@ class PhomemoPrinter(Printer):
         copies: int = 1,
         density: Optional[Union[PrintDensity, int]] = None,
         alignment: Optional[Alignment] = None,
+        x_offset_mm: float = 0.0,
+        y_offset_mm: float = 0.0,
     ) -> None:
         """Drucke ein Bild auf ein Label.
         
@@ -287,7 +311,16 @@ class PhomemoPrinter(Printer):
             copies: Anzahl Kopien (1-99)
             density: Druckdichte (PrintDensity enum oder int 1-15, None = aktuelle Einstellung)
             alignment: Ausrichtung auf Druckbreite
+            x_offset_mm: Derzeit für Phomemo nicht implementiert
+            y_offset_mm: Derzeit für Phomemo nicht implementiert
         """
+        if x_offset_mm != 0.0 or y_offset_mm != 0.0:
+            warnings.warn(
+                "Phomemo printers do not yet support x/y offsets; ignoring x_offset_mm and y_offset_mm.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         # Alignment: Standard aus Klasse wenn nicht angegeben
         if alignment is None:
             alignment = self._DEFAULT_ALIGNMENT

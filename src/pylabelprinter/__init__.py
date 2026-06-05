@@ -23,7 +23,7 @@ Beispiel:
 from typing import Optional, List
 
 from .label import Label, ImageSize, get_image_size
-from .enums import PaperType, Alignment, AutoOffTime, PrintDensity
+from .enums import PaperType, Alignment, AutoOffTime, PrintDensity, PrintTechnology
 from .testlabel import create_test_label, print_test_label
 from .template import LabelTemplate, render_template, print_template
 from .exceptions import (
@@ -42,6 +42,7 @@ from .connection import Connection, UsbConnection
 
 # Importiere Drucker-Treiber (registrieren sich automatisch)
 from .printers import phomemo  # noqa: F401
+from .printers import zebra  # noqa: F401
 
 
 __version__ = "0.1.0"
@@ -68,6 +69,7 @@ __all__ = [
     "Alignment",
     "AutoOffTime",
     "PrintDensity",
+    "PrintTechnology",
     # Exceptions
     "LabelprinterError",
     "PrinterNotFoundError",
@@ -132,9 +134,6 @@ def open(device_id: Optional[str] = None, model: Optional[str] = None, usb_port:
     if device.registration is None:
         raise PrinterNotFoundError(f"No driver for device {device.device_id}")
     
-    # Erstelle Connection und Printer
-    connection = UsbConnection(device.device_path)
-    
     # Versuche modell-spezifischen Treiber zu finden
     from .registry import get_registration_by_model
     
@@ -147,5 +146,13 @@ def open(device_id: Optional[str] = None, model: Optional[str] = None, usb_port:
             printer_class = device.registration.printer_class
     else:
         printer_class = device.registration.printer_class
+    
+    # Erstelle Connection und Printer
+    connection = UsbConnection(
+        device.device_path,
+        write_chunk_size=getattr(printer_class, "_USB_WRITE_CHUNK_SIZE", None),
+        write_chunk_delay=getattr(printer_class, "_USB_WRITE_CHUNK_DELAY", None),
+        write_retry_delay=getattr(printer_class, "_USB_WRITE_RETRY_DELAY", None),
+    )
     
     return printer_class(connection)
