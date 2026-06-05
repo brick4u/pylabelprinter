@@ -33,6 +33,27 @@ def _normalize_sgd_value(value: str) -> str:
     return value
 
 
+def _mask_row_padding_bits(image_bytes: bytes, width_bytes: int, width_dots: int, height: int) -> bytes:
+    """Lösche Padding-Bits am rechten Rand eines 1-Bit-Rasters.
+
+    Zebra `^GF` arbeitet mit vollen Bytes pro Zeile. Ist die Bildbreite nicht
+    durch 8 teilbar, enthält das letzte Byte jeder Zeile Padding-Bits. Diese
+    dürfen nicht gesetzt sein, sonst erscheint rechts ein schwarzer Streifen.
+    """
+    used_bits_in_last_byte = width_dots % 8
+    if used_bits_in_last_byte == 0:
+        return image_bytes
+
+    mask = (0xFF << (8 - used_bits_in_last_byte)) & 0xFF
+    data = bytearray(image_bytes)
+
+    for row in range(height):
+        last_byte_index = row * width_bytes + (width_bytes - 1)
+        data[last_byte_index] &= mask
+
+    return bytes(data)
+
+
 def probe_zebra_usb(device_path: str) -> dict:
     """Treiber-spezifische Probe für Zebra USB-Drucker.
     
@@ -450,6 +471,7 @@ class ZebraPrinter(Printer):
         raw_bytes = bytes(~b & 0xFF for b in raw_bytes)
         
         width_bytes = (label_width + 7) // 8
+        raw_bytes = _mask_row_padding_bits(raw_bytes, width_bytes, label_width, label_height)
         total_bytes = width_bytes * label_height
         
         # ASCII-Hex für ^GF

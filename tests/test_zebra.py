@@ -4,7 +4,11 @@ from collections import deque
 
 import pylabelprinter
 from pylabelprinter.enums import PaperType, PrintTechnology
-from pylabelprinter.printers.zebra.base import ZebraPrinter, _normalize_sgd_value
+from pylabelprinter.printers.zebra.base import (
+    ZebraPrinter,
+    _mask_row_padding_bits,
+    _normalize_sgd_value,
+)
 
 
 class MockConnection:
@@ -100,3 +104,15 @@ def test_zd220_default_print_technology_is_transfer():
     printer = pylabelprinter.printers.zebra.ZebraZD220(MockConnection())
 
     assert printer._PRINT_TECHNOLOGY == PrintTechnology.THERMAL_TRANSFER
+
+
+def test_mask_row_padding_bits_clears_unused_right_edge_bits():
+    masked = _mask_row_padding_bits(
+        image_bytes=bytes([0xFF, 0xFF]),
+        width_bytes=1,
+        width_dots=5,
+        height=2,
+    )
+
+    # Bei 5 Nutzbits müssen die 3 rechten Padding-Bits gelöscht werden.
+    assert masked == bytes([0xF8, 0xF8])
